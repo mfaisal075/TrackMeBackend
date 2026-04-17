@@ -57,10 +57,13 @@ exports.suggestGoal = async (req, res) => {
       data,
     });
   } catch (error) {
+    const maskedKey = process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.substring(0, 5)}...` : 'not-found';
     console.error("AI Controller Error (suggestGoal):", error);
     res.status(500).json({
       success: false,
       message: error.message || "Unable to generate AI response",
+      debug: { keyPreview: maskedKey },
+      details: error.response?.data || error.toString()
     });
   }
 };

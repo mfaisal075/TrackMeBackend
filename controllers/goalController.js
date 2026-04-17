@@ -11,6 +11,7 @@ exports.createGoal = (req, res) => {
     end_date,
     note,
     status,
+    user_id,
   } = req.body;
 
   const file = req.file ? req.file.filename : null;
@@ -25,8 +26,8 @@ exports.createGoal = (req, res) => {
 
   const query = `
     INSERT INTO tbl_goals (
-      category, \`sub_category\`, title, frequency, start_date, end_date, note, file, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      category, \`sub_category\`, title, frequency, start_date, end_date, note, file, status, user_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const values = [
@@ -39,6 +40,7 @@ exports.createGoal = (req, res) => {
     note || null,
     file,
     status || 'Pending',
+    user_id,
   ];
 
   db.query(query, values, (err, result) => {
@@ -69,10 +71,13 @@ exports.fetchGoals = (req, res) => {
       g.*, 
       (SELECT COUNT(*) FROM tbl_goal_details WHERE goal_id = g.id AND (goal_status = 'done' OR goal_status = 'Completed' OR goal_status = g.status)) AS completed_days 
     FROM tbl_goals g 
+    WHERE g.user_id = ?
     ORDER BY g.id DESC
   `;
 
-  db.query(query, (err, results) => {
+  const { user_id } = req.query;
+
+  db.query(query, [user_id], (err, results) => {
     if (err) {
       console.error("Error fetching goals:", err);
       return res.status(500).json({
@@ -90,7 +95,7 @@ exports.fetchGoals = (req, res) => {
 };
 
 exports.addProgress = (req, res) => {
-  const { goal_id, date, goal_status, streak } = req.body;
+  const { goal_id, date, goal_status, streak, user_id } = req.body;
 
   // Basic validation
   if (!goal_id) {
@@ -131,11 +136,11 @@ exports.addProgress = (req, res) => {
       
       const insertQuery = `
         INSERT INTO tbl_goal_details (
-          goal_id, \`date\`, goal_status, created_at, updated_at
-        ) VALUES (?, ?, ?, NOW(), NOW())
+          goal_id, \`date\`, goal_status, user_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, NOW(), NOW())
       `;
 
-      db.query(insertQuery, [goal_id, date || null, goal_status || "done"], (err, result) => {
+      db.query(insertQuery, [goal_id, date || null, goal_status || "done", user_id], (err, result) => {
         if (err) {
           console.error("Error adding progress:", err);
           return res.status(500).json({
@@ -209,9 +214,10 @@ exports.fetchProgress = (req, res) => {
     });
   }
 
-  const query = "SELECT * FROM tbl_goal_details WHERE goal_id = ? ORDER BY date DESC, id DESC";
+  const { user_id } = req.query;
+  const query = "SELECT * FROM tbl_goal_details WHERE goal_id = ? AND user_id = ? ORDER BY date DESC, id DESC";
 
-  db.query(query, [goal_id], (err, results) => {
+  db.query(query, [goal_id, user_id], (err, results) => {
     if (err) {
       console.error("Error fetching progress:", err);
       return res.status(500).json({
@@ -239,6 +245,7 @@ exports.updateGoal = (req, res) => {
     end_date,
     note,
     status,
+    user_id,
   } = req.body;
   const file = req.file ? req.file.filename : null;
 
@@ -291,8 +298,8 @@ exports.updateGoal = (req, res) => {
     });
   }
 
-  query += updates.join(", ") + " WHERE id = ?";
-  values.push(id);
+  query += updates.join(", ") + " WHERE id = ? AND user_id = ?";
+  values.push(id, user_id);
 
   db.query(query, values, (err, result) => {
     if (err) {
@@ -332,10 +339,12 @@ exports.fetchGoalById = (req, res) => {
       g.*, 
       (SELECT COUNT(*) FROM tbl_goal_details WHERE goal_id = g.id AND (goal_status = 'done' OR goal_status = 'Completed' OR goal_status = g.status)) AS completed_days 
     FROM tbl_goals g 
-    WHERE g.id = ?
+    FROM tbl_goals g 
+    WHERE g.id = ? AND g.user_id = ?
   `;
 
-  db.query(query, [id], (err, results) => {
+  const { user_id } = req.query;
+  db.query(query, [id, user_id], (err, results) => {
     if (err) {
       console.error("Error fetching goal:", err);
       return res.status(500).json({
@@ -361,6 +370,7 @@ exports.fetchGoalById = (req, res) => {
 
 exports.deleteGoal = (req, res) => {
   const { id } = req.params;
+  const { user_id } = req.query;
 
   if (!id) {
     return res.status(400).json({
@@ -370,7 +380,7 @@ exports.deleteGoal = (req, res) => {
   }
 
   // Delete goal details first (foreign key constraint)
-  db.query("DELETE FROM tbl_goal_details WHERE goal_id = ?", [id], (err) => {
+  db.query("DELETE FROM tbl_goal_details WHERE goal_id = ? AND user_id = ?", [id, user_id], (err) => {
     if (err) {
       console.error("Error deleting goal details:", err);
       return res.status(500).json({
@@ -380,7 +390,7 @@ exports.deleteGoal = (req, res) => {
     }
 
     // Delete the goal itself
-    db.query("DELETE FROM tbl_goals WHERE id = ?", [id], (err, result) => {
+    db.query("DELETE FROM tbl_goals WHERE id = ? AND user_id = ?", [id, user_id], (err, result) => {
       if (err) {
         console.error("Error deleting goal:", err);
         return res.status(500).json({

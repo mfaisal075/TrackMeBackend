@@ -228,3 +228,61 @@ exports.updatePassword = (req, res) => {
     });
   });
 };
+
+// SIGNUP
+exports.signup = (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({
+      Status: 400,
+      message: "All fields are required",
+    });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({
+      Status: 400,
+      message: "Password must be at least 6 characters long",
+    });
+  }
+
+  // 1. Check if user already exists
+  const checkQuery = "SELECT * FROM tbl_users WHERE email = ?";
+  db.query(checkQuery, [email], (err, results) => {
+    if (err) {
+      return res.status(500).json({ Status: 500, message: "Server error" });
+    }
+
+    if (results.length > 0) {
+      return res.status(400).json({
+        Status: 400,
+        message: "Email already exists",
+      });
+    }
+
+    // 2. Hash password
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(password, salt);
+
+    // 3. Insert user
+    const insertQuery =
+      "INSERT INTO tbl_users (name, email, password, status) VALUES (?, ?, ?, 'active')";
+    db.query(insertQuery, [name, email, hashedPassword], (err, result) => {
+      if (err) {
+        console.error("Error creating user:", err);
+        return res.status(500).json({
+          Status: 500,
+          message: "Server error while creating user",
+        });
+      }
+
+      res.status(201).json({
+        Status: 201,
+        message: "User created successfully",
+        userId: result.insertId,
+      });
+    });
+  });
+};
+
