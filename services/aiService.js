@@ -3,7 +3,7 @@ const axios = require("axios");
 const generateText = async (prompt) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await axios.post(url, {
       contents: [{
@@ -16,13 +16,18 @@ const generateText = async (prompt) => {
     });
 
     if (response.data && response.data.candidates && response.data.candidates.length > 0) {
-      return response.data.candidates[0].content.parts[0].text;
+      const part = response.data.candidates[0].content.parts[0];
+      if (part && part.text) {
+        return part.text;
+      }
     }
     
+    console.error("Gemini API Unexpected Response:", JSON.stringify(response.data, null, 2));
     throw new Error("Invalid response structure from Gemini API");
   } catch (error) {
-    console.error("Gemini API Error:", error.response?.data || error.message);
-    throw error;
+    const errorData = error.response?.data;
+    console.error("Gemini API Error:", JSON.stringify(errorData || error.message, null, 2));
+    throw new Error(errorData?.error?.message || error.message);
   }
 };
 

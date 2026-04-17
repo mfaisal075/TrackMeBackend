@@ -4,19 +4,25 @@ const aiService = require("../services/aiService");
  * Helper to clean and parse JSON response from AI
  */
 const parseAIResponse = (text) => {
+  if (!text || typeof text !== 'string') {
+    throw new Error("Empty or invalid response from AI");
+  }
+
   try {
     // Find the first '{' and the last '}' to extract the JSON object
     const startIndex = text.indexOf('{');
     const endIndex = text.lastIndexOf('}');
     
     if (startIndex === -1 || endIndex === -1) {
+      // If no JSON markers, maybe it's a plain string we can try to wrap or handle
+      console.warn("No JSON object markers found in AI response. Raw text:", text);
       throw new Error("No JSON object found in response");
     }
     
     const jsonString = text.substring(startIndex, endIndex + 1);
     return JSON.parse(jsonString);
   } catch (error) {
-    console.error("AI JSON Parse Error:", error.message, "Raw Text:", text);
+    console.error("AI JSON Parse Error:", error.message, "| Raw Text:", text);
     throw new Error("Failed to parse AI response: " + error.message);
   }
 };
@@ -94,6 +100,7 @@ exports.generateInsight = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "Unable to generate AI response",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
